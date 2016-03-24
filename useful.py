@@ -6,11 +6,7 @@ Created on Mon Jan 25 11:47:40 2016
 """
 
 import numpy as np
-from matplotlib import pyplot as pl
-from glob import glob
-from scipy.optimize import curve_fit
 from scipy.interpolate import UnivariateSpline
-from matplotlib import rc,cm
 
 
 
