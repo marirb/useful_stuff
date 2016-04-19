@@ -84,7 +84,7 @@ def read_ppms_tto_raw(name):
     return data9,data11,header
     
 
-def read_ppms_RT(name):
+def read_ppms_RT(name,NAN=False):
     data=[]
     with open(name,'r') as f:
         ind=10000000000
@@ -94,7 +94,9 @@ def read_ppms_RT(name):
             elif i==ind+1:
                 header=np.array(line.split(',')[:-1])
     ind=ind+2
-    data=np.genfromtxt(name,delimiter=',',skip_header=ind,missing_values=('',))
+    data=np.genfromtxt(name,delimiter=',',skip_header=ind,missing_values=('',)
+    if NAN:
+        data=data[~np.isnan(data).any(axis=1)]
     return data,header   
      
 def read_mpms_MT(name,m_mol=796.612,mass=None,factor=3,cols=(3,4,2,0),NAN=False,save=False):
