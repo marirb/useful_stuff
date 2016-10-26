@@ -84,7 +84,7 @@ def read_ppms_tto_raw(name):
     return data9,data11,header
     
 
-def read_ppms_RT(name,NAN=False):
+def read_ppms_RT(name):
     data=[]
     with open(name,'r') as f:
         ind=10000000000
@@ -94,9 +94,7 @@ def read_ppms_RT(name,NAN=False):
             elif i==ind+1:
                 header=np.array(line.split(',')[:-1])
     ind=ind+2
-    data=np.genfromtxt(name,delimiter=',',skip_header=ind,missing_values=('',)
-    if NAN:
-        data=data[~np.isnan(data).any(axis=1)]
+    data=np.genfromtxt(name,delimiter=',',skip_header=ind,missing_values=('',))
     return data,header   
      
 def read_mpms_MT(name,m_mol=796.612,mass=None,factor=3,cols=(3,4,2,0),NAN=False,save=False):
@@ -146,6 +144,13 @@ def read_mpms_MT(name,m_mol=796.612,mass=None,factor=3,cols=(3,4,2,0),NAN=False,
         if NAN:
             data=data[~np.isnan(data).any(axis=1)]
         return data,header,info
+
+
+def read_spectra(name):
+    data=np.genfromtxt(name,skip_header=14)
+    return data 
+
+
         
 def emu2emu_per_mol(data,mass,B,m_mol=796.612,factor=3,cols=[1,]):
     '''converts magnetic moment [emu] into susceptability chi [emu/mol]. default values are molar mass of na4ir3o8 and factor=3 to get to [emu/Ir-mol]\n
@@ -191,9 +196,55 @@ def point_data_distance(x,y,x0,y0):
     d=np.min(np.sqrt((x-x0)**2+(y-y0)**2))
     return d
     
+
+def Gauss_1(x,a,b,c,d):
+    '''FWHM = 2*sqrt(2*ln(2))*c = 2.35482*c'''
+    return a*np.exp(-(x-b)**2/(2*c))+d
+
+def Gauss_2(x,a1,b1,c1,a2,b2,c2,d):
+    '''FWHM = 2*sqrt(2*ln(2))*c = 2.35482*c'''
+    return a1*np.exp(-(x-b1)**2/(2*c1))+a2*np.exp(-(x-b2)**2/(2*c2))+d
+        
+def Lorentz_1(x,a,b,c,d):
+    '''FWHM = 2*c'''
+    return a*c/((x-b)**2+c**2)+d
     
+def Lorentz_2(x,a1,b1,c1,a2,b2,c2,d):
+    '''FWHM = 2*c'''
+    return a1*c1/((x-b1)**2+c1**2)+a2*c2/((x-b2)**2+c2**2)+d
     
+
+def Temp_sep(data,col=3,turn=1):
+    '''seperates the cooling up and cooling down curve of a temperaure sweep.\n
+    col: is the column of temperature\n
+    turn=1: turningpoint is at lowest temperature) or\n
+    turn=2: turning point is at highest temperature\n
+    output: two data sets up and down (same order as during measurement)'''
+    Tmin=np.min(data[:,col])
+    imin=np.argmin(data[:,col])
+    Tmax=np.max(data[:,col])
+    imax=np.argmax(data[:,col])
+    if turn==1:
+        if (data[imin+1,col]-Tmin)<(data[imin-1,col]-Tmin):
+            down=data[:imin+1,:]
+            up=data[imin+1:,:]
+        else:
+            down=data[:imin,:]
+            up=data[imin:,:] 
+    elif turn==2:
+        if (data[imax+1,col]-Tmax)<(data[imax-1,col]-Tmax):
+            down=data[:imax+1,:]
+            up=data[imax+1:,:]
+        else:
+            down=data[:imax,:]
+            up=data[imax:,:] 
+    else:
+        print('unvalid entry for variable "turn"')
     
+    return down,up
+
+
+
 #def plot_function(x,y)
     
     
