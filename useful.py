@@ -7,7 +7,8 @@ Created on Mon Jan 25 11:47:40 2016
 
 import numpy as np
 from scipy.interpolate import UnivariateSpline
-
+from mpmath import re,pi,cos,sin,spherharm
+from scipy.special import sph_harm
 
 
 def read_xrd_sim(name):
@@ -244,8 +245,175 @@ def Temp_sep(data,col=3,turn=1):
     return down,up
 
 
+'''################################################################################################################################'''   
+ 
+'''spherical harmonics, p-orbitals and d-orbitals'''
 
-#def plot_function(x,y)
+def Y_lm(l,m):
+    '''returns absolute value of real part of spherical harmonics so that it can be plotted as \n
+    mpmath.splot(Y_lm(l,m), [0,pi], [0,2*pi], points=100, keep_aspect=True, axes=False)'''
+    def g(theta,phi):
+        R = abs(re(spherharm(l,m,theta,phi)))
+        x = R*cos(phi)*sin(theta)
+        y = R*sin(phi)*sin(theta)
+        z = R*cos(theta)
+        return [x,y,z]
+    return g
+    
+    
+def combine_Ylm(l,m1,m2,a,b):
+    def g(theta,phi):
+        R = abs(re(a*spherharm(l,m1,theta,phi)+b*spherharm(l,m2,theta,phi)))**2
+        x = R*cos(phi)*sin(theta)
+        y = R*sin(phi)*sin(theta)
+        z = R*cos(theta)
+        return [x,y,z]
+    return g
+
+def p_z():
+    '''plot with mpmath.splot(p_z(), [0,pi], [0,2*pi])'''
+    return Y_lm(1,0)
+    
+def p_x():
+    '''plot with mpmath.splot(p_z(), [0,pi], [0,2*pi])'''
+    return combine_Ylm(1,-1,1,1,-1)
+
+def p_y():
+    '''plot with mpmath.splot(p_z(), [0,pi], [0,2*pi])'''
+    return combine_Ylm(1,-1,1,1j,1j)
+
+def d_xy():
+    '''plot with mpmath.splot(p_z(), [0,pi], [0,2*pi])'''
+    return combine_Ylm(2,-2,2,1j,-1j)
+
+def d_xz():
+    '''plot with mpmath.splot(p_z(), [0,pi], [0,2*pi])'''
+    return combine_Ylm(2,-1,1,1,-1)
+    
+def d_yz():
+    '''plot with mpmath.splot(p_z(), [0,pi], [0,2*pi])'''
+    return combine_Ylm(2,-1,1,1j,1j)
+    
+def d_x2y2():
+    return combine_Ylm(2,-2,2,1,1)
+    
+def d_z2():
+    '''plot with mpmath.splot(p_z(), [0,pi], [0,2*pi])'''
+    return Y_lm(2,0)
+
+    
+'''################################################################################################################################'''
+
+'''numerical spherical harmonics (numpy/scipy)'''    
+
+def Y_lm_num(l,m,phimax=np.pi,thetamax=2*np.pi,num_points=100):    
+    '''returns numerical spherical harmonics as [x,y,z],s where x,y,z are cartesian coordinates and s is realvalue of spherical harmonic or orbital\n
+    plot in the following way\n\n
+    
+    Y,s=Y_lm_num(1,1)\n
+    colormap = cm.ScalarMappable( cmap=pl.get_cmap("cool"))
+    
+    fig = pl.figure(1,figsize=(10,10))\n 
+    ax = fig.gca(projection='3d')\n
+    surf = ax.plot_surface(*Y, rstride=2, cstride=2, facecolors=colormap.to_rgba(s), \n
+                           linewidth=0.5, antialiased=False)\n
+    
+    lim=0.15 \n
+    ax.set_xlabel('x') \n
+    ax.set_ylabel('y') \n
+    ax.set_zlabel('z') \n
+    ax.set_xlim(-lim,lim) \n
+    ax.set_ylim(-lim,lim) \n
+    ax.set_zlim(-lim,lim) \n
+    ax.set_aspect("equal")'''
+    
+    phi = np.linspace(0, phimax, num_points)
+    theta = np.linspace(0, thetamax, num_points)
+    phi, theta = np.meshgrid(phi, theta)
+    s=np.real(sph_harm(m,l,theta,phi))
+    r=np.abs(s)**2
+    x = r*np.sin(phi) * np.cos(theta)
+    y = r*np.sin(phi) * np.sin(theta)
+    z = r*np.cos(phi)
+    return [x,y,z],s
+    
+   
+def combine_Ylm_num(l,m1,m2,a,b,phimax=np.pi,thetamax=2*np.pi,num_points=100):    
+    '''returns numerical spherical harmonics as [x,y,z],s where x,y,z are cartesian coordinates and s is realvalue of spherical harmonic or orbital\n
+    plot in the following way\n\n
+    
+    Y,s=Y_lm_num(1,1)\n
+    colormap = cm.ScalarMappable( cmap=pl.get_cmap("cool"))
+    
+    fig = pl.figure(1,figsize=(10,10))\n 
+    ax = fig.gca(projection='3d')\n
+    surf = ax.plot_surface(*Y, rstride=2, cstride=2, facecolors=colormap.to_rgba(s), \n
+                           linewidth=0.5, antialiased=False)\n
+    
+    lim=0.15 \n
+    ax.set_xlabel('x') \n
+    ax.set_ylabel('y') \n
+    ax.set_zlabel('z') \n
+    ax.set_xlim(-lim,lim) \n
+    ax.set_ylim(-lim,lim) \n
+    ax.set_zlim(-lim,lim) \n
+    ax.set_aspect("equal")'''
+    
+    phi = np.linspace(0, phimax, num_points)
+    theta = np.linspace(0, thetamax, num_points)
+    phi, theta = np.meshgrid(phi, theta)
+    s=np.real(a*sph_harm(m1,l,theta,phi)+b*sph_harm(m2,l,theta,phi))
+    r=np.abs(s)**2
+    x = r*np.sin(phi) * np.cos(theta)
+    y = r*np.sin(phi) * np.sin(theta)
+    z = r*np.cos(phi)
+    return [x,y,z],s
+
+def p_z_num():
+    '''plot with mpmath.splot(p_z(), [0,pi], [0,2*pi])'''
+    return Y_lm_num(1,0)
+    
+def p_x_num():
+    '''plot with mpmath.splot(p_z(), [0,pi], [0,2*pi])'''
+    return combine_Ylm_num(1,-1,1,1,-1)
+
+def p_y_num():
+    '''plot with mpmath.splot(p_z(), [0,pi], [0,2*pi])'''
+    return combine_Ylm_num(1,-1,1,1j,1j)
+
+def d_xy_num():
+    '''plot with mpmath.splot(p_z(), [0,pi], [0,2*pi])'''
+    return combine_Ylm_num(2,-2,2,1j,-1j)
+
+def d_xz_num():
+    '''plot with mpmath.splot(p_z(), [0,pi], [0,2*pi])'''
+    return combine_Ylm_num(2,-1,1,1,-1)
+    
+def d_yz_num():
+    '''plot with mpmath.splot(p_z(), [0,pi], [0,2*pi])'''
+    return combine_Ylm_num(2,-1,1,1j,1j)
+    
+def d_x2y2_num():
+    return combine_Ylm_num(2,-2,2,1,1)
+    
+def d_z2_num():
+    '''plot with mpmath.splot(p_z(), [0,pi], [0,2*pi])'''
+    return Y_lm_num(2,0)
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+
     
     
     
