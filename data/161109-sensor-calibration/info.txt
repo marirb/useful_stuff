@@ -1,0 +1,2 @@
+"no overshoot" mode used (no waiting time) instead of sweep mode 
+cooling: 0.2 K/min
