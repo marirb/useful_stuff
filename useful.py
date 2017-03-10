@@ -37,7 +37,7 @@ def cernox_R2Temp(x):
 
 
 
-def read_xrd_sim(name):
+def read_tsv(name):
     '''read data where columns are seperated by whitespace.\n no skiprow option implemented yet'''
     data=[]
     with open(name,'r') as f:
@@ -466,7 +466,7 @@ def temp_sep(data,col=3,turn=1):
     col: is the column of temperature (start counting with 0, col=3 for PPMS resistivity option)\n
     turn=1: turningpoint is at lowest temperature) or\n
     turn=2: turning point is at highest temperature\n
-    output: two data sets up and down (same order as during measurement)'''
+    output: two data sets down and up (in this order)'''
     Tmin=np.min(data[:,col])
     imin=np.argmin(data[:,col])
     Tmax=np.max(data[:,col])
@@ -479,12 +479,12 @@ def temp_sep(data,col=3,turn=1):
             down=data[:imin,:]
             up=data[imin:,:] 
     elif turn==2:
-        if (data[imax+1,col]-Tmax)<(data[imax-1,col]-Tmax):
-            down=data[:imax+1,:]
-            up=data[imax+1:,:]
+        if (Tmax-data[imax+1,col])<(Tmax-data[imax-1,col]):
+            up=data[:imax+1,:]
+            down=data[imax+1:,:]
         else:
-            down=data[:imax,:]
-            up=data[imax:,:] 
+            up=data[:imax,:]
+            down=data[imax:,:] 
     else:
         print('unvalid entry for variable "turn"')
     
@@ -514,6 +514,7 @@ def matplotlib_parameters(size=1, textsize=1, style=1):
     
     **style=1:** is for powerpoint presentations, set size=3    
     '''
+    #calculate golden ratio
     fig_width_pt = size*427.21597  # Get this from LaTeX using \showthe\columnwidth
     inches_per_pt = 1.0/72.27               # Convert pt to inch
     golden_mean = (np.sqrt(5)-1.0)/2.0         # Aesthetic ratio
@@ -625,7 +626,7 @@ hexcols = ['#332288', '#88CCEE', '#44AA99', '#117733', '#999933', '#DDCC77',
 '''################################################################################################################################'''   
 '''spherical harmonics, p-orbitals and d-orbitals (sympy/mpmath)'''
 
-def Y_lm(l,m):
+def y_lm(l,m):
     '''returns absolute value of real part of spherical harmonics so that it can be plotted as \n
     mpmath.splot(Y_lm(l,m), [0,pi], [0,2*pi], points=100, keep_aspect=True, axes=False)'''
     def g(theta,phi):
@@ -637,7 +638,7 @@ def Y_lm(l,m):
     return g
     
     
-def combine_Ylm(l,m1,m2,a,b):
+def combine_ylm(l,m1,m2,a,b):
     def g(theta,phi):
         R = abs(re(a*spherharm(l,m1,theta,phi)+b*spherharm(l,m2,theta,phi)))**2
         x = R*cos(phi)*sin(theta)
@@ -648,40 +649,40 @@ def combine_Ylm(l,m1,m2,a,b):
 
 def p_z():
     '''plot with mpmath.splot(p_z(), [0,pi], [0,2*pi])'''
-    return Y_lm(1,0)
+    return y_lm(1,0)
     
 def p_x():
     '''plot with mpmath.splot(p_z(), [0,pi], [0,2*pi])'''
-    return combine_Ylm(1,-1,1,1,-1)
+    return combine_ylm(1,-1,1,1,-1)
 
 def p_y():
     '''plot with mpmath.splot(p_z(), [0,pi], [0,2*pi])'''
-    return combine_Ylm(1,-1,1,1j,1j)
+    return combine_ylm(1,-1,1,1j,1j)
 
 def d_xy():
     '''plot with mpmath.splot(p_z(), [0,pi], [0,2*pi])'''
-    return combine_Ylm(2,-2,2,1j,-1j)
+    return combine_ylm(2,-2,2,1j,-1j)
 
 def d_xz():
     '''plot with mpmath.splot(p_z(), [0,pi], [0,2*pi])'''
-    return combine_Ylm(2,-1,1,1,-1)
+    return combine_ylm(2,-1,1,1,-1)
     
 def d_yz():
     '''plot with mpmath.splot(p_z(), [0,pi], [0,2*pi])'''
-    return combine_Ylm(2,-1,1,1j,1j)
+    return combine_ylm(2,-1,1,1j,1j)
     
 def d_x2y2():
-    return combine_Ylm(2,-2,2,1,1)
+    return combine_ylm(2,-2,2,1,1)
     
 def d_z2():
     '''plot with mpmath.splot(p_z(), [0,pi], [0,2*pi])'''
-    return Y_lm(2,0)
+    return y_lm(2,0)
 
     
 '''################################################################################################################################'''
 '''numerical spherical harmonics (numpy/scipy)'''    
 
-def Y_lm_num(l,m,phimax=np.pi,thetamax=2*np.pi,num_points=100):    
+def y_lm_num(l,m,phimax=np.pi,thetamax=2*np.pi,num_points=100):    
     '''returns numerical spherical harmonics as [x,y,z],s where x,y,z are cartesian coordinates and s is realvalue of spherical harmonic or orbital\n
     plot in the following way\n\n
     
@@ -713,7 +714,7 @@ def Y_lm_num(l,m,phimax=np.pi,thetamax=2*np.pi,num_points=100):
     return [x,y,z],s
     
    
-def combine_Ylm_num(l,m1,m2,a,b,phimax=np.pi,thetamax=2*np.pi,num_points=100):    
+def combine_ylm_num(l,m1,m2,a,b,phimax=np.pi,thetamax=2*np.pi,num_points=100):    
     '''returns numerical spherical harmonics as [x,y,z],s where x,y,z are cartesian coordinates and s is realvalue of spherical harmonic or orbital\n
     plot in the following way\n\n
     
@@ -746,34 +747,34 @@ def combine_Ylm_num(l,m1,m2,a,b,phimax=np.pi,thetamax=2*np.pi,num_points=100):
 
 def p_z_num():
     '''plot with mpmath.splot(p_z(), [0,pi], [0,2*pi])'''
-    return Y_lm_num(1,0)
+    return y_lm_num(1,0)
     
 def p_x_num():
     '''plot with mpmath.splot(p_z(), [0,pi], [0,2*pi])'''
-    return combine_Ylm_num(1,-1,1,1,-1)
+    return combine_ylm_num(1,-1,1,1,-1)
 
 def p_y_num():
     '''plot with mpmath.splot(p_z(), [0,pi], [0,2*pi])'''
-    return combine_Ylm_num(1,-1,1,1j,1j)
+    return combine_ylm_num(1,-1,1,1j,1j)
 
 def d_xy_num():
     '''plot with mpmath.splot(p_z(), [0,pi], [0,2*pi])'''
-    return combine_Ylm_num(2,-2,2,1j,-1j)
+    return combine_ylm_num(2,-2,2,1j,-1j)
 
 def d_xz_num():
     '''plot with mpmath.splot(p_z(), [0,pi], [0,2*pi])'''
-    return combine_Ylm_num(2,-1,1,1,-1)
+    return combine_ylm_num(2,-1,1,1,-1)
     
 def d_yz_num():
     '''plot with mpmath.splot(p_z(), [0,pi], [0,2*pi])'''
-    return combine_Ylm_num(2,-1,1,1j,1j)
+    return combine_ylm_num(2,-1,1,1j,1j)
     
 def d_x2y2_num():
-    return combine_Ylm_num(2,-2,2,1,1)
+    return combine_ylm_num(2,-2,2,1,1)
     
 def d_z2_num():
     '''plot with mpmath.splot(p_z(), [0,pi], [0,2*pi])'''
-    return Y_lm_num(2,0)
+    return y_lm_num(2,0)
     
     
     
