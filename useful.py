@@ -145,9 +145,23 @@ def read_ppms_RT(name,cell=False):
 
 
     
-def read_mpms_MT(name,m_mol=796.612,mass=None,factor=3,cols=(3,4,2,0),NAN=False,save=False):
-    '''read mpms data where columns are seperated by komma.\n functions looks for the keyword '[Data]' and starts reading data in the next line\n
-    NAN: if true, read in rows containing NAN values (which is empty entry or entry starting with #) get deleted'''
+def read_mpms_MT(name,m_mol=796.612,mass=None,factor=3,cols=(3,4,2,0,5),NAN=False,save=False,del_corrupt_data=False,threshold=0.1):
+    '''
+    read mpms M(T) .dat file (columns are seperated by komma). functions looks for the keyword '[Data]' and starts reading data in the next line.\n
+    **returns:** data,header,info\n
+    **this function automatically calculates:**\n 
+    * moment per gram (emu/g). 
+    * moment per mol (emu/mol). 
+    * chi per mol (emu/mol)
+    * chi per mol atom sort (emu/mol)
+    * 1/chi (mol/emu) (per atom sort)   
+    
+    **mass** (miligram):  if mass=None weight given in the data file is taken. \n
+    **m_mol** (g/mol)   **Na4Ir3O8:** 796.612    |    **Cd2Ru2O7:** 538.953\n
+    **factor:** factor is used to calculate chi per mol atom sort. e.g. for Na4Ir3O8 its factor=3 to get chi per Ir-mol\n
+    **save:** if save=True, the calculated and original data (cols 3,4,2,0,5) gets saved as .txt file with the same name as the original .dat file\n
+    **NAN:** if true, read in rows containing NAN values (which is empty entry or entry starting with #) get deleted
+    '''
     info={'NAME':'', 'WEIGHT':'', 'AREA':'', 'LENGTH':'', 'SHAPE':'', 'COMMENT':'', 'SEQUENCE FILE':'','FILEOPENTIME':''}
     with open(name,'r') as f:
         ind=10000000000
@@ -184,13 +198,17 @@ def read_mpms_MT(name,m_mol=796.612,mass=None,factor=3,cols=(3,4,2,0),NAN=False,
         chi_emu_factor_mol=data[:,1]*m_mol/(mass*B*factor)
         one_over_chi=1/chi_emu_factor_mol
         data=np.hstack((data,m_emu_g.reshape(l,1),m_emu_mol.reshape(l,1),chi_emu_mol.reshape(l,1),chi_emu_factor_mol.reshape(l,1),one_over_chi.reshape(l,1)))
-        print(str(mass)+' g',str(B)+' Oe',str(m_mol)+' g/mol')        
+        print(str(mass)+' g',str(B)+' Oe',str(m_mol)+' g/mol')     
+#        header='Temperature [K]\t long magnetic moment [emu]\t magnetic field [Oe]\t timestamp [s]\t magnetic moment [emu/g]\t magnetic moment [emu/mol]\t Chi [emu/mol]\t Chi [emu/factor-mol]\t 1/chi [factor-mol/emu]'
+        
+        if NAN:
+            data=data[~np.isnan(data).any(axis=1)]
+        if del_corrupt_data:
+            data=data[data[:,4]/data[:,1]<threshold,:]
         if save:
             name=name[:-3]+'txt'                
             np.savetxt(name,data,delimiter='\t',header='Temperature [K]\t long magnetic moment [emu]\t magnetic field [Oe]\t timestamp [s]\t magnetic moment [emu/g]\t magnetic moment [emu/mol]\t Chi [emu/mol]\t Chi [emu/factor-mol]\t 1/chi [factor-mol/emu]')
         
-        if NAN:
-            data=data[~np.isnan(data).any(axis=1)]
         return data,header,info
 
 
@@ -505,7 +523,7 @@ def find_cooling_rate(data,col_T=3,col_t=1,_range=2,min_num_of_points=10):
 '''################################################################################################################################'''   
 '''Matplotlib parameters (and plotting function)'''
 
-def matplotlib_parameters(size=1, textsize=1, style=1):
+def matplotlib_parameters(size=1, textsize=1.2, style=1):
     '''
     **size=1** gives a figwidth of 427.21597 points which is the columnwidth of a latex DIN A4 standard document.\n 
     If your figure in your latex document is 0.8 wide you should choose size=0.8 and the fontsizes specified in this function correspond to the fontsizes in the latex document\n     
