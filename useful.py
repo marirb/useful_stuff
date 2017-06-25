@@ -10,6 +10,7 @@ from scipy.interpolate import UnivariateSpline
 from mpmath import re,pi,cos,sin,spherharm
 from scipy.special import sph_harm
 from sympy.matrices import Matrix, eye, zeros, ones, diag
+from scipy.optimize import curve_fit
 from sympy import I,sqrt
 from matplotlib import rc,cm
 from matplotlib import pyplot as pl
@@ -20,6 +21,19 @@ import os
 dir = os.path.dirname(__file__)
 filename = os.path.join(dir, 'data','X91774.txt')
 filename2 = os.path.join(dir, 'data','161117-cernox-R07-C12.txt')
+
+
+
+'''constants'''
+class constants:
+    kB=1.380648*10**(-23)
+    e=1.602177*10**(-19)
+    h=6.626070*10**(-34)
+    hbar=1.054571*10**(-34)
+    mu_bohr=9.274010*10**(-24)
+    R=8.314460
+    NA=6.022141*10**23
+
 
 '''Puk sensor calibration spline function'''
 T_puk_calibration_data=np.genfromtxt(filename,skip_header=3,usecols=(0,1)) 
@@ -113,7 +127,7 @@ def read_ppms_tto_raw(name):
 
     
 
-def read_ppms_RT(name,cell=False):
+def read_ppms_RT(name,cell=False,abs=True):
     '''
     - **index 1:**\t time stamp (s)\n
     - **index 3:**\t system temperature (K)\n
@@ -133,7 +147,10 @@ def read_ppms_RT(name,cell=False):
                 header=np.array(line.split(',')[:-1])
     ind=ind+2
     data=np.genfromtxt(name,delimiter=',',skip_header=ind,missing_values=('',))
-    data[:,19:23]=np.abs(data[:,19:23])
+    if abs:
+        data[:,19:23]=np.abs(data[:,19:23])
+    else:
+        pass
     if cell:
         spl=UnivariateSpline(T_puk_calibration_data[::-1,1],T_puk_calibration_data[::-1,0],k=3,s=0.01)
         T=spl(data[:,19]).reshape(-1,1)
@@ -204,7 +221,7 @@ def read_mpms_MT(name,m_mol=796.612,mass=None,factor=3,cols=(3,4,2,0,5),NAN=Fals
         if NAN:
             data=data[~np.isnan(data).any(axis=1)]
         if del_corrupt_data:
-            data=data[data[:,4]/data[:,1]<threshold,:]
+            data=data[np.abs(data[:,4]/data[:,1])<threshold,:]
         if save:
             name=name[:-3]+'txt'                
             np.savetxt(name,data,delimiter='\t',header='Temperature [K]\t long magnetic moment [emu]\t magnetic field [Oe]\t timestamp [s]\t magnetic moment [emu/g]\t magnetic moment [emu/mol]\t Chi [emu/mol]\t Chi [emu/factor-mol]\t 1/chi [factor-mol/emu]')
@@ -212,7 +229,7 @@ def read_mpms_MT(name,m_mol=796.612,mass=None,factor=3,cols=(3,4,2,0,5),NAN=Fals
         return data,header,info
 
 
-def read_mpms_raw(name):
+def read_mpms_raw(name,splitnumber=False):
     '''
     **Temp start/stop:** ind 3 / ind 4
     **scan number (for each temperature):** ind 5\n    
@@ -229,11 +246,18 @@ def read_mpms_raw(name):
             elif i==ind+1:
                 header=np.array(line.split(',')[:-1])
         ind=ind+2
-    data=np.genfromtxt(name,delimiter=',',skip_header=ind,missing_values=('',))
+    data=np.genfromtxt(name,delimiter=',', skip_header=ind, missing_values=('',))
     number_of_scans=np.max(data[:,5])
+#    print(number_of_scans)
     data=data[data[:,5]==number_of_scans]
-    splitnumber=len(np.where(data[:,7]==np.min(data[:,7]))[0])
-    data=np.split(data,splitnumber)
+    if splitnumber==False:
+        splitnumber=len(np.where(data[:,7]==np.min(data[:,7]))[0])
+        data=np.split(data,splitnumber)
+    else:
+        length,y=data.shape
+#        print int(length)
+        splitnumber=int(length)/splitnumber
+        data=np.split(data,splitnumber)
     return data,header
     
 
@@ -343,6 +367,25 @@ def lorentz_2(x,a1,b1,c1,a2,b2,c2,d):
     '''FWHM = 2*c'''
     return a1*0.1*c1/((x-100*b1)**2+(0.1*c1)**2)+a2*0.1*c2/((x-100*b2)**2+(0.1*c2)**2)+d
     
+
+def MPMS_fit_long_voltage(x,a1,a2,a3,a4):
+    R=0.97
+    G=1.519    
+    return a1+a2*x+a3*(2*(R**2+(x+a4)**2)**(-1.5)-(R**2+(G+(x+a4))**2)**(-1.5)-(R**2+(-G+(x+a4))**2)**(-1.5))
+
+
+def fit_curve(f,x,y,p0=None,max_fev=100000,xlim=[]):
+    if xlim:
+        i_min=find_nearest(x,xlim[0])
+        i_max=find_nearest(x,xlim[1])
+        x=x[i_min:i_max]
+        y=y[i_min:i_max]
+    popt,perr=curve_fit(f,x,y, p0=p0, maxfev=max_fev)
+    return popt,perr
+
+
+
+'''############################################################################################################################################'''
 
 
 def spectrum_peak_parameters(x,y):
@@ -549,7 +592,7 @@ def matplotlib_parameters(size=1, textsize=1.2, style=1):
           'ytick.labelsize': textsize*24,
           'figure.figsize': fig_size,
           'figure.dpi': 600,
-          'axes.labelpad': 6,
+          'axes.labelpad': 8,
           'axes.grid': True,
           'axes.linewidth':4
 #          'axes.titlepad':20,
@@ -621,6 +664,10 @@ tableau20 = [(31/255., 119/255., 180/255.), (174/255., 199/255., 232/255.), (255
 hexcols = ['#332288', '#88CCEE', '#44AA99', '#117733', '#999933', '#DDCC77', 
            '#CC6677', '#882255', '#AA4499', '#661100', '#6699CC', '#AA4466',
            '#4477AA']
+
+new_colors = ['#1f77b4', '#ff7f0e', '#2ca02c', '#d62728',
+              '#9467bd', '#8c564b', '#e377c2', '#7f7f7f',
+              '#bcbd22', '#17becf']
 
 
 #fig1=pl.figure(1)
