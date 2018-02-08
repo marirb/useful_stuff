@@ -27,6 +27,7 @@ filename = os.path.join(dir, 'data','X91774.txt')
 filename2 = os.path.join(dir, 'data','161117-cernox-R07-C12.txt')
 filename3 = os.path.join(dir, 'data','Pt100-calibration.txt')
 filename4 = os.path.join(dir, 'data','171023_x124321_calibration.txt')
+filename_GE = os.path.join(dir, 'data','GEVarnish_1T.txt')
 
 
 
@@ -46,7 +47,7 @@ class constants:
 
 #####################################################################################################################################################
 
-'''Puk sensor calibration spline function'''
+'''Puk sensor calibration spline function (of pressure cell puk)'''
 T_puk_calibration_data=np.genfromtxt(filename,skip_header=3,usecols=(0,1)) 
 
 '''bare chip cernox calibration spline function'''
@@ -83,6 +84,20 @@ def x124321_R2Temp(x):
      
     spl=UnivariateSpline(Z,T,k=3,s=0.001)
     return spl(np.log10(x))
+
+
+
+'''spline to GEVarnish data (taken at 1T)'''
+MT_Ge = np.genfromtxt(filename_GE, delimiter='\t')
+def GEVarnish_MT(x):
+    '''
+    **input:** temperature
+    **output:** magnetic moment of GEVarnish
+    '''
+    spl=UnivariateSpline(MT_Ge[:,0],MT_Ge[:,1], k=3, s=2.5e-12)
+    return spl(x)
+
+
 
 #####################################################################################################################################################
 '''XRAY'''
@@ -364,7 +379,7 @@ MPMS3_header=['Comment', 'Time', 'Temperature', 'Field', 'ACMoment', 'ACMoment_e
 
 
 
-def read_MPMS3(name,m_mol=796.612,mass=None,factor=2):
+def read_MPMS3(name):
     ''' 
     * Comment
     * Time
@@ -417,11 +432,42 @@ def read_MPMS3(name,m_mol=796.612,mass=None,factor=2):
     * DC_Squid_Drift
     * DC_Min_V
     * DC_Max_V
-    * DC_Scans_per_Measure
+    * DC_Scans_per_Measure \n\n
+    noise_limit: value between 0 and 1: filters according to DC_Free_fit
     '''
     d=pd.read_csv(name,skiprows=27
                ,names=MPMS3_header)
     return d
+
+def read_MPMS3_evaluate(name, mass, m_mol, meas='DC', factor=1, noise_limit_DC=0.5,noise_limit_AC=1):
+    ''' 
+    * **Temperature**
+    * **Chi**
+    * **Moment**
+    * **Moment error**
+    mass in mg \n
+    m_mol: string of chemical firmula\n
+    noise_limit_DC: value between 0 and 1: filters according to DC_Free_fit \n
+    noise_limit_AC: filtering according to ACMoment_err
+    '''
+    d=pd.read_csv(name,skiprows=27
+               ,names=MPMS3_header)
+    if meas=='DC':
+        M_err=d.DC_Free_Fit
+        d=d[d.DC_Free_Fit>noise_limit_DC]
+        M=d.DCMoment_Free_Ctr
+    elif meas=='AC':   
+        M_err=d.ACMoment_err
+        d=d[d.ACMoment_err < noise_limit_AC]
+        M=d.ACMoment
+    else:
+        print('wrong meas keyword')
+    T=d.Temperature
+    mass=mass/1000
+    m_mol=get_molar_mass(m_mol)
+    B=d.Field[0]
+    chi=M*m_mol/(mass*B*factor)
+    return T, chi, M, M_err
 
     
 def read_mpms_MT(name,m_mol=796.612,mass=None,factor=2,cols=(3,4,2,0,5),NAN=False,save=False,del_corrupt_data=False,threshold=0.1):
@@ -503,6 +549,8 @@ def read_mpms_raw(name,splitnumber=False):
     **Long voltage:** ind 9\n
     **Lomg Average voltage** ind 10\n
     **Long Detrended Voltage:** ind 11
+    **long scaled response:** ind 16
+    **Long Avg. Scaled Response:** ind 17
     '''
     with open(name,'r') as f:
         ind=np.nan
@@ -526,6 +574,9 @@ def read_mpms_raw(name,splitnumber=False):
         data=np.split(data,splitnumber)
     return data,header
     
+
+
+
 
 
 #####################################################################################################################################################
@@ -818,6 +869,8 @@ def fit_curve(f,x,y,p0=None,max_fev=100000,xlim=[]):
         i_max=find_nearest(x,xlim[1])
         x=x[i_min:i_max]
         y=y[i_min:i_max]
+        print x
+        print y
     popt,perr=curve_fit(f,x,y, p0=p0, maxfev=max_fev)
     return popt,perr
 
