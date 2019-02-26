@@ -12,10 +12,12 @@ from mpmath import re,pi,cos,sin,spherharm
 from scipy.special import sph_harm
 from sympy.matrices import Matrix, eye, zeros, ones, diag
 from scipy.optimize import curve_fit
+from scipy.signal import savgol_filter
 from sympy import I,sqrt
 from matplotlib import rc,cm
 from matplotlib import pyplot as pl
 import re
+from diamagnetic_correction import get_diamag_corr
 
 
 
@@ -28,20 +30,33 @@ filename2 = os.path.join(dir, 'data','161117-cernox-R07-C12.txt')
 filename3 = os.path.join(dir, 'data','Pt100-calibration.txt')
 filename4 = os.path.join(dir, 'data','171023_x124321_calibration.txt')
 filename_GE = os.path.join(dir, 'data','GEVarnish_1T.txt')
+filename_quartz_rod = os.path.join(dir, 'data','180404_MoverH-quartz-rod.txt')
+filename_brass_holder = os.path.join(dir, 'data','brass-holder','brass-holder-bkgr.txt')
+
+filename_quartz_rod_1T = os.path.join(dir, 'data', 'quartz-holder', 'quartz-rod_1T.txt')
+filename_quartz_rod_2T = os.path.join(dir, 'data', 'quartz-holder', 'quartz-rod_2T.txt')
+filename_quartz_rod_3T = os.path.join(dir, 'data', 'quartz-holder', 'quartz-rod_3T.txt')
+filename_quartz_rod_4T = os.path.join(dir, 'data', 'quartz-holder', 'quartz-rod_4T.txt')
+filename_quartz_rod_5T = os.path.join(dir, 'data', 'quartz-holder', 'quartz-rod_5T.txt')
+filename_quartz_rod_6T = os.path.join(dir, 'data', 'quartz-holder', 'quartz-rod_6T.txt')
+filename_quartz_rod_7T = os.path.join(dir, 'data', 'quartz-holder', 'quartz-rod_7T.txt')
 
 
 
 '''constants'''
 class constants:
     kB=1.380648*10**(-23)
+    kB_gauss = 1.38064853e-16
     e=1.602177*10**(-19)
     eps0=8.854187817*10**(-12)
     h=6.626070*10**(-34)
     hbar=1.054571*10**(-34)
     mu_bohr=9.274010*10**(-24)
+    mu_bohr_gauss = 9.274009995e-21
     mu_0=4*np.pi*10**(-7)
     R=8.314460
     NA=6.022141*10**23
+    C_to_mueff=2.8295
 
 
 
@@ -97,6 +112,73 @@ def GEVarnish_MT(x):
     spl=UnivariateSpline(MT_Ge[:,0],MT_Ge[:,1], k=3, s=2.5e-12)
     return spl(x)
 
+
+'''spline to empty quartz rod data (taken at different fields)'''
+def quartz_rod(x,field):
+    '''
+    **input:** temperature and magnetilx field value
+    **output:** M/H of quartz rod: multiply by field in Oe
+    '''
+    if field < 15000:
+        T_, M_ = np.genfromtxt(filename_quartz_rod_1T, delimiter='\t', unpack =True)
+        savgol1 = savgol_filter(M_,15,3)
+        spl = UnivariateSpline(T_[:-300], 1e6*savgol1[:-300],k=3, s=3.7e-3, ext=3)
+        B=10000
+    if field < 25000:
+        T_, M_ = np.genfromtxt(filename_quartz_rod_2T, delimiter='\t', unpack =True)
+        savgol2 = savgol_filter(M_,51,3)
+        spl = UnivariateSpline(T_, 1e6*savgol2,k=3, s=1e-2, ext=3)
+        B=20000
+    if field < 35000:
+        T_, M_ = np.genfromtxt(filename_quartz_rod_3T, delimiter='\t', unpack =True)
+        savgol3 = savgol_filter(M_,41,3)
+        print T_[150:-1][::-6]
+        spl = UnivariateSpline(T_[:-150], 1e6*savgol3[:-150],k=3, s=3e-2, ext=3)
+        B=30000
+    if field < 45000:
+        T_, M_ = np.genfromtxt(filename_quartz_rod_4T, delimiter='\t', unpack =True)
+        savgol4 = savgol_filter(M_,91,3)
+        spl = UnivariateSpline(T_[:-100], 1e6*savgol4[:-100],k=2, s=2e-2, ext=3)
+        B=40000
+    if field < 55000:
+        T_, M_ = np.genfromtxt(filename_quartz_rod_5T, delimiter='\t', unpack =True)
+        savgol5 = savgol_filter(M_,21,3)
+        spl = UnivariateSpline(T_[:-250], 1e6*savgol5[:-250],k=3, s=9.0e-2, ext=3)
+        B=50000
+    if field < 65000:
+        T_, M_ = np.genfromtxt(filename_quartz_rod_6T, delimiter='\t', unpack =True)
+        savgol6 = savgol_filter(M_,51,3)
+        spl = UnivariateSpline(T_[:-260], 1e6*savgol6[:-260],k=3, s=5e-3, ext=3)
+        B=60000
+    if field < 75000:
+        T_, M_ = np.genfromtxt(filename_quartz_rod_7T, delimiter='\t', unpack =True)
+        savgol7 = savgol_filter(M_,11,3)
+        spl = UnivariateSpline(T_[:-250], 1e6*savgol7[:-250],k=3, s=8e-2, ext=3)
+        B=70000
+    else:
+        pass
+    return 1e-6*spl(x) / B * field
+
+
+
+
+
+'''spline to empty brass rod with powder container'''
+MT_brass = np.genfromtxt(filename_brass_holder, delimiter='\t')
+def brass_rod_01T(x):
+    '''
+    **input:** temperature
+    **output:** M/H of brass rod: multiply by field in Oe
+    '''
+    spl=UnivariateSpline(MT_brass[:,0],MT_brass[:,1], k=3, s=0, ext=3)
+    return spl(x)
+def brass_rod_5T(x):
+    '''
+    **input:** temperature
+    **output:** M/H of brass rod: multiply by field in Oe
+    '''
+    spl=UnivariateSpline(MT_brass[:,0],MT_brass[:,2], k=3, s=0, ext=3)
+    return spl(x)
 
 
 #####################################################################################################################################################
@@ -183,7 +265,7 @@ def read_ppms_tto_raw(name):
 
     
 
-def read_ppms_RT(name,cell=False,abs=True):
+def read_ppms_RT(name, cell=False, abs=True, sortB=False, field_unit='Oe'):
     '''
     - **index 1:**\t time stamp (s)\n
     - **index 3:**\t system temperature (K)\n
@@ -214,21 +296,39 @@ def read_ppms_RT(name,cell=False,abs=True):
         data=np.hstack((data,T))
     else:
         pass
+    if sortB:
+        s=np.mean(np.diff(data[:,4]))
+        if s<0:
+            data=data[::-1,:]
+        else:
+            pass
+    if field_unit == 'T':
+        data[:,4] = data[:,4]/10000
+    elif field_unit == 'Oe':
+        pass
+    else:
+        pass
     return data,header   
 
 
-def read_ppms_RH(name,cell=False,abs=False,sortB=True):
+
+
+def read_ppms_red_HC(name, m_mol, mass=None, factor=1, del_corrupt_data=False, threshold=100, del_points=False, sortT=False):
     '''
+    assumes that HC is measured in units µJ/K \n
     - **index 1:**\t time stamp (s)\n
-    - **index 3:**\t system temperature (K)\n
-    - **index 4:**\t magnetic field (Oe)\n
-    - **index 6,8,10,12:**\t Resistivity Ch1, Ch2, Ch3, Ch4 (units depend on data file settings during measurement. check header)\n
-    - **index 19,20,21,22:**\t Resistance Ch1, Ch2, Ch3, Ch4 (Ohms)
+    - **index 4:**\t system temperature (K)\n
+    - **index 5:**\t magnetic field (Oe)\n
+    - **index 7:**\t sample temperature\n
+    - **index 9:**\t Sample HC
+    - **index -1:**\t Molar specific heat in J/(K*mol) if sample Hc was measured in standard µJ/K
+    - index 15:\t fit deviation (Chi square)
+    - index 11:\t Addenda HC (usually µJ/K)
     
-    **cell:** if True, resistance values from Puk sensor in Channel 1 are converted into temperature using calibration file 'X91774.txt' in package folder \n
-    **sortB:** if True data gets sorted so that B is increasing    
+    **m_mol** (g/mol)   **Na4Ir3O8:** 796.612    |    **Cd2Ru2O7:** 538.953\n
+    
     '''
-    data=[]
+    info={'NAME':'', 'WEIGHT':'', 'AREA':'', 'LENGTH':'', 'SHAPE':'', 'COMMENT':'', 'SEQUENCE FILE':'','FILEOPENTIME':''}
     with open(name,'r') as f:
         ind=10000000000
         for i, line in enumerate(f):
@@ -236,36 +336,42 @@ def read_ppms_RH(name,cell=False,abs=False,sortB=True):
                 ind=i
             elif i==ind+1:
                 header=np.array(line.split(',')[:-1])
+            elif line.find(',MASS:')>=0:
+                info["WEIGHT"] = line[line.find(",INFO")+6:line.find(",MASS")]
     ind=ind+2
-    data=np.genfromtxt(name,delimiter=',',skip_header=ind,missing_values=('',))
-    if abs:
-        data[:,19:23]=np.abs(data[:,19:23])
+    if not mass:
+        mass=float(info['WEIGHT'])/1000.
+    else:
+        mass=mass/1000.
+    data=np.genfromtxt(name, delimiter=',', skip_header=ind, missing_values=('',))
+    if sortT:
+        data = sort_after_column(data, col=7)
+    if del_points:
+        data = np.delete(data, list(range(0, data.shape[0], 3)), axis=0)
+        data = np.delete(data, list(range(0, data.shape[0], 2)), axis=0)
     else:
         pass
-    if cell:
-        spl=UnivariateSpline(T_puk_calibration_data[::-1,1],T_puk_calibration_data[::-1,0],k=3,s=0.01)
-        T=spl(data[:,19]).reshape(-1,1)
-        data=np.hstack((data,T))
+    if del_corrupt_data:
+            data=data[data[:,15]<threshold,:]
     else:
         pass
-    if sortB:
-        s=np.mean(np.diff(data[:,4]))
-        if s<0:
-            data=data[::-1,:]
-        else:
-            pass
-    return data,header 
+    l=len(data)
+    C_mol=data[:,9]*m_mol/(mass*factor)/1e6
+    data=np.hstack((data,C_mol.reshape(l,1)))
+    
+    print 'mass = {:.2f} mg'.format(mass*1000.)
+    return data,header   
 
 
-
-def read_ppms_HC(name, m_mol=538.953, mass=None, factor=2, del_corrupt_data=False, threshold=90):
+def read_ppms_blue_HC(name, m_mol, mass=None, factor=1, del_corrupt_data=False, threshold=100):
     '''
+    assumes that HC is measured in units µJ/K \n
     - **index 1:**\t time stamp (s)\n
     - **index 3:**\t system temperature (K)\n
     - **index 4:**\t magnetic field (Oe)\n
     - **index 6:**\t sample temperature\n
     - **index 8:**\t Sample HC
-    - **index 9:**\t Molar specific heat (total mol, not mol per magnetic ion)
+    - **index -1:**\t Molar specific heat J/(K*mol) (total mol, not mol per magnetic ion)
     
     **m_mol** (g/mol)   **Na4Ir3O8:** 796.612    |    **Cd2Ru2O7:** 538.953\n
     
@@ -285,17 +391,17 @@ def read_ppms_HC(name, m_mol=538.953, mass=None, factor=2, del_corrupt_data=Fals
         mass=float(info['WEIGHT'])/1000
     else:
         mass=mass/1000
-    data=np.genfromtxt(name,delimiter=',',skip_header=ind,missing_values=('',))
+    data=np.genfromtxt(name, delimiter=',', skip_header=ind, missing_values=('',))
+    if del_corrupt_data:
+            data=data[data[:,14]<threshold,:]
+    else:
+        pass
     l=len(data)
     C_mol=data[:,8]*m_mol/(mass*factor)
     data=np.hstack((data,C_mol.reshape(l,1)))
     
-    if del_corrupt_data:
-            data=data[data[:,17]>threshold,:]
-    
-    print mass
-    return data,header   
-
+    print 'mass = {:.2f} mg'.format(mass*1000)
+    return data,header
 
 
 def read_ppms_VSM(name,m_mol=796.612,mass=None,factor=2,cols=(1,2,3,4,5),NAN=False):
@@ -439,7 +545,8 @@ def read_MPMS3(name):
                ,names=MPMS3_header)
     return d
 
-def read_MPMS3_evaluate(name, mass, m_mol, meas='DC', factor=1, noise_limit_DC=0.5,noise_limit_AC=1):
+def read_MPMS3_evaluate(name, mass, m_mol, meas='DC', factor=1, noise_limit_DC=0.8, noise_limit_AC=1e-5, 
+                        rod = 'straw', diamagn_corr = False, m_foil = False, sweep_mode='both', sortB=False, sortT=False):
     ''' 
     * **Temperature**
     * **Chi**
@@ -448,29 +555,71 @@ def read_MPMS3_evaluate(name, mass, m_mol, meas='DC', factor=1, noise_limit_DC=0
     mass in mg \n
     m_mol: string of chemical firmula\n
     noise_limit_DC: value between 0 and 1: filters according to DC_Free_fit \n
-    noise_limit_AC: filtering according to ACMoment_err
+    noise_limit_AC: filtering according to ACMoment_err\n
+    rod: 'straw', 'brass', 'quartz'\n
+    **diamagn_corr:** e.g. diamagn_corr = 'Li1+2Ir4+1O2-3\n
+    **foil:** mass in mg
     '''
     d=pd.read_csv(name,skiprows=27
                ,names=MPMS3_header)
+    if sweep_mode=='up':
+        Tmin, ind_min = np.min(d.Temperature), np.argmin(d.Temperature)
+        Tmax, ind_max = np.max(d.Temperature),np.argmax(d.Temperature)
+        if np.abs(d.Temperature[0]-Tmin) > np.abs(d.Temperature[0]-Tmax):
+            ind_sweep = ind_min
+        else:
+            ind_sweep = ind_max
+    elif sweep_mode=='down':
+        pass
+    elif sweep_mode=='both':
+        pass
+    
+    if sortB:
+        d = d.sort_values(by='Field')
+
+    if sortT:
+        d = d.sort_values(by='Temperature')
+    
     if meas=='DC':
         M_err=d.DC_Free_Fit
         d=d[d.DC_Free_Fit>noise_limit_DC]
         M=d.DCMoment_Free_Ctr
     elif meas=='AC':   
         M_err=d.ACMoment_err
-        d=d[d.ACMoment_err < noise_limit_AC]
+        d = d[d.ACMoment_err < noise_limit_AC]
         M=d.ACMoment
     else:
         print('wrong meas keyword')
-    T=d.Temperature
+        
+    T = d.Temperature
+    B = d.Field[0]
     mass=mass/1000
-    m_mol=get_molar_mass(m_mol)
-    B=d.Field[0]
+    
+    if rod == 'quartz':
+        M = M - quartz_rod(T,B)
+    elif rod == 'brass':
+        pass
+    else:
+        pass
+    
+    if m_foil:
+        M = M + 8.0e-10 * B * m_foil
+    else:
+        pass
+    
+    if type(m_mol)==str:
+        m_mol=get_molar_mass(m_mol)
+    else:
+        m_mol = m_mol
     chi=M*m_mol/(mass*B*factor)
-    return T, chi, M, M_err
+    if diamagn_corr:
+        chi = chi - get_diamag_corr(diamagn_corr)/factor
+    else:
+        pass
+    return T.values, chi.values, M.values, M_err.values, d.Field.values
 
     
-def read_mpms_MT(name,m_mol=796.612,mass=None,factor=2,cols=(3,4,2,0,5),NAN=False,save=False,del_corrupt_data=False,threshold=0.1):
+def read_mpms_MT(name, m_mol, mass=None, factor=1, cols=(3,4,2,0,5), NAN=False, save=False, del_corrupt_data=False, threshold=0.1, diamagn_corr = False, m_foil = False):
     '''
     read mpms M(T) .dat file (columns are seperated by komma). functions looks for the keyword '[Data]' and starts reading data in the next line.\n
     **returns:** data,header,info\n
@@ -489,7 +638,8 @@ def read_mpms_MT(name,m_mol=796.612,mass=None,factor=2,cols=(3,4,2,0,5),NAN=Fals
     **m_mol** (g/mol)   **Na4Ir3O8:** 796.612    |    **Cd2Ru2O7:** 538.953\n
     **factor:** factor is used to calculate chi per mol atom sort. e.g. for Na4Ir3O8 its factor=3 to get chi per Ir-mol\n
     **save:** if save=True, the calculated and original data (cols 3,4,2,0,5) gets saved as .txt file with the same name as the original .dat file\n
-    **NAN:** if true, read in rows containing NAN values (which is empty entry or entry starting with #) get deleted
+    **NAN:** if true, read in rows containing NAN values (which is empty entry or entry starting with #) get deleted\n
+    **diamagn_corr:** e.g. diamagn_corr = 'Li1+2Ir4+1O2-3
     '''
     info={'NAME':'', 'WEIGHT':'', 'AREA':'', 'LENGTH':'', 'SHAPE':'', 'COMMENT':'', 'SEQUENCE FILE':'','FILEOPENTIME':''}
     with open(name,'r') as f:
@@ -521,10 +671,18 @@ def read_mpms_MT(name,m_mol=796.612,mass=None,factor=2,cols=(3,4,2,0,5),NAN=Fals
         data=np.genfromtxt(name,delimiter=',',skip_header=ind,missing_values=('',),usecols=cols)
         l=len(data)
         B=data[0,2]
-        m_emu_g=data[:,1]/mass
-        m_emu_mol=data[:,1]*m_mol/mass
-#        chi_emu_mol=data[:,1]*m_mol/(mass*B)
-        chi_emu_factor_mol=data[:,1]*m_mol/(mass*B*factor)
+        M = data[:,1]
+        if m_foil:
+            M = M + 8.0e-10 * B * m_foil
+        else:
+            pass
+        m_emu_g = M / mass
+        m_emu_mol = M * m_mol / mass
+        chi_emu_factor_mol = M * m_mol / (mass * B * factor)
+        if diamagn_corr:
+            chi_emu_factor_mol = chi_emu_factor_mol - get_diamag_corr(diamagn_corr)/factor
+        else:
+            pass
         one_over_chi=1/chi_emu_factor_mol
         data=np.hstack((data,m_emu_g.reshape(l,1),m_emu_mol.reshape(l,1),chi_emu_factor_mol.reshape(l,1),one_over_chi.reshape(l,1)))
         print(str(mass)+' g',str(B)+' Oe',str(m_mol)+' g/mol')     
@@ -620,7 +778,15 @@ def read_spectra(name,lower_limit=693,upper_limit=700, normalize=False):
 '''SEVERAL FUNCTIONS'''  
 
 
-        
+def dsin(x):
+    return np.sin(np.deg2rad(x))
+
+def dcos(x):
+    return np.cos(np.deg2rad(x))
+
+def dtan(x):
+    return np.tan(np.deg2rad(x))
+
 def emu2emu_per_mol(data,mass,B,m_mol=796.612,factor=3,cols=[1,]):
     '''converts magnetic moment [emu] into susceptability chi [emu/mol]. default values are molar mass of na4ir3o8 and factor=3 to get to [emu/Ir-mol]\n
     data: array\n
@@ -691,11 +857,38 @@ def eps_r_parallel_plates(C,d=1,A=1):
     eps_r=1000*C*d/(A*constants.eps0)
     return eps_r
 
-#em=150
-#ei=1
-#di=0.2
+
+
+def average_WK_data(name,n_steps):
+    '''
+    build average of WK data when many points are taken at each temperature\n
+    returns: temperature, capacitance, cap std, loss D, loss std
+    '''
+    d=np.genfromtxt(name)
+    a=np.split(d,n_steps)
+    temp=[]
+    cap=[]
+    loss=[]
+    cap_std=[]
+    loss_std=[]
+    
+    for i in a:
+        T_mean = np.mean(i[:,3])
+        C_mean = np.mean(i[:,1])
+        C_std = np.std(i[:,1])
+        D_mean = np.mean(i[:,2])
+        D_std = np.std(i[:,2])
+        temp.append(T_mean)
+        cap.append(C_mean)
+        loss.append(D_mean)
+        cap_std.append(C_std)
+        loss_std.append(D_std)
+    
+    return temp, cap, cap_std, loss, loss_std
+
 
 #eff=em*(2*di*(ei-em)+ei+2*em)/(2*em+ei+di*(em-ei))
+
 
 def sort_after_column(a,col=0):
     '''sort array a after column col'''
@@ -737,7 +930,7 @@ def delete_spikes_in_data(a,col=[0,1],s=1,threshold=3):
 '''############################################################################################################################################'''
 
 atomic_mass = {
-    "H": 1.0079, "He": 4.0026, "Li": 6.941, "Be": 9.0122,
+    "H": 1.0079, "He": 4.0026, "Li": 6.941, "Be": 9.0122, 
     "B": 10.811, "C": 12.011, "N": 14.007, "O": 15.999, "F": 18.998,
     "Ne": 20.180, "Na": 22.990, "Mg": 24.305, "Al": 26.982,
     "Si": 28.086, "P": 30.974, "S": 32.065, "Cl": 35.453,
@@ -794,224 +987,7 @@ def get_molar_mass(formula):
 
 
 
-
-'''fitting functions'''
 '''############################################################################################################################################'''
-
-
-def insulator_fit(x,a,b):
-    '''
-    0.01*a*np.exp(0.001*constants.e*b/(constants.kB*x))\n
-    b in meV
-    '''
-    return 0.01*a*np.exp(0.001*constants.e*b/(constants.kB*x))
-
-def insulator_fit2(x,a1,b1,a2,b2):
-    '''
-    0.01*a1*np.exp(0.001*constants.e*b1/(constants.kB*x)) + 0.01*a2*np.exp(0.001*constants.e*b2/(constants.kB*x))\n
-    b1,b2  in meV
-    '''
-    return 0.01*a1*np.exp(0.001*constants.e*b1/(constants.kB*x))+0.01*a2*np.exp(0.001*constants.e*b2/(constants.kB*x))
-
-def curie_weiss(x,C,T_CW,X0):
-    '''**Curie-Weiss:** C/(T-T\ :sub:`CW`\ )+0.0001*X\ :sub:`0`\ \n
-    **mu\ :sub:`eff`\ ** =sqrt(3*k\ :sub:`B`\ *C/N\ :sub:`A`\ )=2.8295*sqrt(C)*mu\ :sub:`B`\ '''
-    return C/(x-T_CW)+0.0001*np.abs(X0)
-
-def curie_weiss2(x,a,b):
-    return a/(x-b)
-
-def gauss_1(x,a,b,c,d):
-    '''
-    FWHM = 2*sqrt(2*ln(2))*c = 2.35482*c\n
-    a*np.exp(-(x-b)**2/(2*c))+d    
-    '''
-    return 100*a*np.exp(-(x-100*b)**2/(2*c*0.1))+d
-
-def gauss_2(x,a1,b1,c1,a2,b2,c2,d):
-    '''FWHM = 2*sqrt(2*ln(2))*c = 2.35482*c'''
-    return 100*a1*np.exp(-(x-100*b1)**2/(2*c1*0.1))+100*a2*np.exp(-(x-100*b2)**2/(2*c2*0.1))+d
-        
-def lorentz_1(x,a,b,c,d):
-    '''FWHM = 2*c'''
-    return a*c/((x-b)**2+c**2)+d
-    
-def lorentz_2(x,a1,b1,c1,a2,b2,c2,d):
-    '''FWHM = 2*c'''
-    return a1*0.1*c1/((x-100*b1)**2+(0.1*c1)**2)+a2*0.1*c2/((x-100*b2)**2+(0.1*c2)**2)+d
-    
-
-def MPMS_SQUID_response(x,a3,a4):
-    '''SQUID response function for 5T MPMS (no linear correction term)
-    '''
-    R=0.97
-    G=1.519    
-    return a3*(2*(R**2+(x+a4)**2)**(-1.5)-(R**2+(G+(x+a4))**2)**(-1.5)-(R**2+(-G+(x+a4))**2)**(-1.5))
-
-def MPMS_SQUID_response_lin_correction(x,a1,a2,a3,a4):
-    '''SQUID response function with linear correction for 5T MPMS
-    '''
-    R=0.97
-    G=1.519    
-    return a2+a1*x+a3*(2*(R**2+(x+a4)**2)**(-1.5)-(R**2+(G+(x+a4))**2)**(-1.5)-(R**2+(-G+(x+a4))**2)**(-1.5))
-
-def MPMS3_SQUID_response_lin_correction(x,a1,a2,a3,a4):
-    '''SQUID response function with liner correction for MPMS3
-    '''
-    R=8.4455
-    G=8.255  
-    return a1+a2*x+a3*(2*(R**2+(x+a4)**2)**(-1.5)-(R**2+(G+(x+a4))**2)**(-1.5)-(R**2+(-G+(x+a4))**2)**(-1.5))
-
-
-def fit_curve(f,x,y,p0=None,max_fev=100000,xlim=[]):
-    if xlim:
-        i_min=find_nearest(x,xlim[0])
-        i_max=find_nearest(x,xlim[1])
-        x=x[i_min:i_max]
-        y=y[i_min:i_max]
-        print x
-        print y
-    popt,perr=curve_fit(f,x,y, p0=p0, maxfev=max_fev)
-    return popt,perr
-
-
-
-'''############################################################################################################################################'''
-
-
-def spectrum_peak_parameters(x,y):
-    peaks,dips=peakdetect(y,lookahead=20)
-    b1,b2=x[peaks[0][0]],x[peaks[1][0]]
-    return b1,b2
-    
-
-
-
-def _datacheck_peakdetect(x_axis, y_axis):
-    if x_axis is None:
-        x_axis = range(len(y_axis))
-    
-    if len(y_axis) != len(x_axis):
-        raise (ValueError, 
-                'Input vectors y_axis and x_axis must have same length')
-    
-    #needs to be a numpy array
-    y_axis = np.array(y_axis)
-    x_axis = np.array(x_axis)
-    return x_axis, y_axis
-
-    
-def peakdetect(y_axis, x_axis = None, lookahead = 40, delta=20):
-    """
-    Converted from/based on a MATLAB script at: 
-    http://billauer.co.il/peakdet.html
-    
-    function for detecting local maximas and minmias in a signal.
-    Discovers peaks by searching for values which are surrounded by lower
-    or larger values for maximas and minimas respectively
-    
-    keyword arguments:
-    y_axis -- A list containg the signal over which to find peaks
-    x_axis -- (optional) A x-axis whose values correspond to the y_axis list
-        and is used in the return to specify the postion of the peaks. If
-        omitted an index of the y_axis is used. (default: None)
-    lookahead -- (optional) distance to look ahead from a peak candidate to
-        determine if it is the actual peak (default: 200) 
-        '(sample / period) / f' where '4 >= f >= 1.25' might be a good value
-    delta -- (optional) this specifies a minimum difference between a peak and
-        the following points, before a peak may be considered a peak. Useful
-        to hinder the function from picking up false peaks towards to end of
-        the signal. To work well delta should be set to delta >= RMSnoise * 5.
-        (default: 0)
-            delta function causes a 20% decrease in speed, when omitted
-            Correctly used it can double the speed of the function
-    
-    return -- two lists [max_peaks, min_peaks] containing the positive and
-        negative peaks respectively. Each cell of the lists contains a tupple
-        of: (position, peak_value) 
-        to get the average peak value do: np.mean(max_peaks, 0)[1] on the
-        results to unpack one of the lists into x, y coordinates do: 
-        x, y = zip(*tab)
-    """
-    max_peaks = []
-    min_peaks = []
-    dump = []   #Used to pop the first hit which almost always is false
-       
-    # check input data
-    x_axis, y_axis = _datacheck_peakdetect(x_axis, y_axis)
-    # store data length for later use
-    length = len(y_axis)
-    
-    
-    #perform some checks
-    if lookahead < 1:
-        raise ValueError, "Lookahead must be '1' or above in value"
-    if not (np.isscalar(delta) and delta >= 0):
-        raise ValueError, "delta must be a positive number"
-    
-    #maxima and minima candidates are temporarily stored in
-    #mx and mn respectively
-    mn, mx = np.Inf, -np.Inf
-    
-    #Only detect peak if there is 'lookahead' amount of points after it
-    for index, (x, y) in enumerate(zip(x_axis[:-lookahead], 
-                                        y_axis[:-lookahead])):
-        if y > mx:
-            mx = y
-            mxpos = x
-        if y < mn:
-            mn = y
-            mnpos = x
-        
-        ####look for max####
-        if y < mx-delta and mx != np.Inf:
-            #Maxima peak candidate found
-            #look ahead in signal to ensure that this is a peak and not jitter
-            if y_axis[index:index+lookahead].max() < mx:
-                max_peaks.append([mxpos, mx])
-                dump.append(True)
-                #set algorithm to only find minima now
-                mx = np.Inf
-                mn = np.Inf
-                if index+lookahead >= length:
-                    #end is within lookahead no more peaks can be found
-                    break
-                continue
-            #else:  #slows shit down this does
-            #    mx = ahead
-            #    mxpos = x_axis[np.where(y_axis[index:index+lookahead]==mx)]
-        
-        ####look for min####
-        if y > mn+delta and mn != -np.Inf:
-            #Minima peak candidate found 
-            #look ahead in signal to ensure that this is a peak and not jitter
-            if y_axis[index:index+lookahead].min() > mn:
-                min_peaks.append([mnpos, mn])
-                dump.append(False)
-                #set algorithm to only find maxima now
-                mn = -np.Inf
-                mx = -np.Inf
-                if index+lookahead >= length:
-                    #end is within lookahead no more peaks can be found
-                    break
-            #else:  #slows shit down this does
-            #    mn = ahead
-            #    mnpos = x_axis[np.where(y_axis[index:index+lookahead]==mn)]
-    
-    
-    #Remove the false hit on the first value of the y_axis
-    try:
-        if dump[0]:
-            max_peaks.pop(0)
-        else:
-            min_peaks.pop(0)
-        del dump
-    except IndexError:
-        #no peaks were found, should the function return empty lists?
-        pass
-        
-    return [max_peaks, min_peaks]
-
 
 def temp_sep(data,col=3,turn=1):
     '''seperates the cooling up and cooling down curve of a temperaure sweep.\n
@@ -1061,7 +1037,7 @@ def move_figure(newX=2000, newY=100):
 '''################################################################################################################################'''   
 '''Matplotlib parameters (and plotting function)'''
 
-def matplotlib_parameters(size=1, textsize=1.2, style=1):
+def matplotlib_parameters2(figsize = 'golden ratio', size=1, textsize=1.5, xmargin=False, ymargin=False, style=1):
     '''
     **size=1** gives a figwidth of 427.21597 points which is the columnwidth of a latex DIN A4 standard document.\n 
     If your figure in your latex document is 0.8 wide you should choose size=0.8 and the fontsizes specified in this function correspond to the fontsizes in the latex document\n     
@@ -1071,28 +1047,36 @@ def matplotlib_parameters(size=1, textsize=1.2, style=1):
     **style=1:** is for powerpoint presentations, set size=3    
     '''
     #calculate golden ratio
-    fig_width_pt = size*427.21597  # Get this from LaTeX using \showthe\columnwidth
-    inches_per_pt = 1.0/72.27               # Convert pt to inch
-    golden_mean = (np.sqrt(5)-1.0)/2.0         # Aesthetic ratio
-    fig_width = fig_width_pt*inches_per_pt  # width in inches
-    fig_height = fig_width*golden_mean      # height in inches
-    fig_size =  [fig_width,fig_height]
+    if figsize=='golden ratio':
+        fig_width_pt = size*427.21597  # Get this from LaTeX using \showthe\columnwidth
+        inches_per_pt = 1.0/72.27               # Convert pt to inch
+        golden_mean = (np.sqrt(5)-1.0)/2.0         # Aesthetic ratio
+        fig_width = fig_width_pt*inches_per_pt  # width in inches
+        fig_height = fig_width*golden_mean      # height in inches
+        fig_size =  [fig_width,fig_height]
+    elif figsize=='slides':
+        fig_size=(size*4,size*3)
+    elif figsize=='square':
+        fig_size=(size*3,size*3)
+    else:
+        fig_size = figsize
 
     params1 = {'backend': 'ps',
           'axes.labelsize': textsize*30,
           'font.size': textsize*30,
-          'legend.fontsize': textsize*26,
+          'legend.fontsize': textsize*27,
           'legend.labelspacing':0.25,
-          'xtick.labelsize': textsize*24,
-          'ytick.labelsize': textsize*24,
+          'xtick.labelsize': textsize*25,
+          'ytick.labelsize': textsize*25,
           'figure.figsize': fig_size,
           'figure.dpi': 300,
           'axes.labelpad': 8,
           'axes.grid': True,
           'axes.linewidth':2,
+          'legend.numpoints': 1,
+          'legend.handlelength': 0.8,
+          'legend.handleheight': 0.8
 #          'axes.labelweight': 'normal',
-#          'axes.xmargin': 0.0, # margin for xrange. 0.1 gives a margin of 10 percent 
-#          'axes.ymargin': 0.0,
 #          'axes.titlepad':20,
 #          'figure.subplot.bottom': 0.1, # just if subplots are used
 #          'figure.subplot.hspace': 0.2,
@@ -1100,139 +1084,46 @@ def matplotlib_parameters(size=1, textsize=1.2, style=1):
 #          'figure.subplot.right': 0.9,
 #          'figure.subplot.top': 0.9,
 #          'figure.subplot.wspace': 0.2,
-#          'axes.ymargin': 0 #sets yrange with a certain margin to top and botton
-          }    
+          }
+    if xmargin:
+        params1['axes.xmargin'] = xmargin
+    if ymargin:
+        params1['axes.ymargin'] = ymargin
     if style==1:
         return params1
     else:
         pass
 
+font_serif = ['DejaVu Serif',
+              'Bitstream Vera Serif',
+              'Computer Modern Roman',
+              'New Century Schoolbook',
+              'Century Schoolbook L',
+              'Utopia',
+              'ITC Bookman',
+              'Bookman',
+              'Nimbus Roman No9 L',
+              'Times New Roman',
+              'Times',
+              'Palatino',
+              'Charter',
+              'serif']
 
-def matplotlib_parameters2(size=1, textsize=1.2, style=1):
-    '''
-    **size=1** gives a figwidth of 427.21597 points which is the columnwidth of a latex DIN A4 standard document.\n 
-    If your figure in your latex document is 0.8 wide you should choose size=0.8 and the fontsizes specified in this function correspond to the fontsizes in the latex document\n     
-    
-    **textsize:** float, changes fontsize of x,y-axis labels, legend, text, title, x,y-tick-labels at once but keeps the fontsize ratio between them\n    
-    
-    **style=1:** is for powerpoint presentations, set size=3    
-    '''
-    #calculate golden ratio
-    fig_width_pt = size*427.21597  # Get this from LaTeX using \showthe\columnwidth
-    inches_per_pt = 1.0/72.27               # Convert pt to inch
-    golden_mean = (np.sqrt(5)-1.0)/2.0         # Aesthetic ratio
-    fig_width = fig_width_pt*inches_per_pt  # width in inches
-    fig_height = 1.1*fig_width*golden_mean      # height in inches
-    fig_size =  [fig_width,fig_height]
-
-    params1 = {'backend': 'ps',
-          'axes.labelsize': textsize*30,
-          'font.size': textsize*30,
-          'font.weight':'bold',
-          'legend.fontsize': textsize*28,
-          'legend.labelspacing':0.25,
-          'xtick.labelsize': textsize*26,
-          'ytick.labelsize': textsize*26,
-          'figure.figsize': fig_size,
-          'figure.dpi': 300,
-          'axes.labelpad': 8,
-          'axes.grid': True,
-          'axes.linewidth':2,
-#          'axes.labelweight': 'normal',
-#          'axes.xmargin': 0.0, # margin for xrange. 0.1 gives a margin of 10 percent 
-#          'axes.ymargin': 0.0,
-#          'axes.titlepad':20,
-#          'figure.subplot.bottom': 0.1, # just if subplots are used
-#          'figure.subplot.hspace': 0.2,
-#          'figure.subplot.left': 0.125,
-#          'figure.subplot.right': 0.9,
-#          'figure.subplot.top': 0.9,
-#          'figure.subplot.wspace': 0.2,
-          }    
-    if style==1:
-        return params1
-    else:
-        pass
+font_sans_serif = ['DejaVu Sans',
+                   'Bitstream Vera Sans',
+                   'Computer Modern Sans Serif',
+                   'Lucida Grande',
+                   'Verdana',
+                   'Geneva',
+                   'Lucid',
+                   'Arial',
+                   'Helvetica',
+                   'Avant Garde',
+                   'sans-serif']
 
 
 
 
-
-def figure(n,x,y,xlabel='',ylabel='', labels=[''], legend=True, xlim=None,ylim=None,title='', 
-           xlog=False, ylog=False, linestyles=[], color=[], colormap=[]):
-    fig=pl.figure(n)
-    ax=pl.axes()
-    
-    if isinstance(x,list):
-        pass
-    else:
-        print('x and y must must be a list')
-    
-    lines=[]
-    for i in range(len(x)):
-        line,=pl.plot(x[i],y[i])
-        lines.append(line)
-    
-    ax.set_xlabel(xlabel)
-    ax.set_ylabel(ylabel)
-    ax.set_title(title)
-    
-    if xlim:
-        ax.set_xlim(xlim[0],xlim[1])
-    else:
-        pass
-    if ylim:
-        ax.set_ylim(ylim[0],ylim[1])
-    else:
-        pass
-    
-    
-    if ylog:
-        ax.set_yscale('log')
-    else:
-        ax.set_yscale('linear')
-#    if len(labels)<len(lines):
-#        l=['']*(len(lines)-len(labels))
-#        labels.extend(l)        
-        
-    if legend:
-        ax.legend(lines,labels)
-    
-    return fig,ax,lines
-
-
-
-# These are the "Tableau 20" colors as RGB.    
-tableau20 = [(31/255., 119/255., 180/255.), (174/255., 199/255., 232/255.), (255/255., 127/255., 14/255.), (255/255., 187/255., 120/255.),    
-             (44/255., 160/255., 44/255.), (152/255., 223/255., 138/255.), (214/255., 39/255., 40/255.), (255/255., 152/255., 150/255.),    
-             (148/255., 103/255., 189/255.), (197/255., 176/255., 213/255.), (140/255., 86/255., 75/255.), (196/255., 156/255., 148/255.),    
-             (227/255., 119/255., 194/255.), (247/255., 182/255., 210/255.), (127/255., 127/255., 127/255.), (199/255., 199/255., 199/255.),    
-             (188/255., 189/255., 34/255.), (219/255., 219/255., 141/255.), (23/255., 190/255., 207/255.), (158/255., 218/255., 229/255.)]    
-  
-hexcols = ['#332288', '#88CCEE', '#44AA99', '#117733', '#999933', '#DDCC77', 
-           '#CC6677', '#882255', '#AA4499', '#661100', '#6699CC', '#AA4466',
-           '#4477AA']
-
-new_colors = ['#1f77b4', '#ff7f0e', '#2ca02c', '#d62728',
-              '#9467bd', '#8c564b', '#e377c2', '#7f7f7f',
-              '#bcbd22', '#17becf']
-
-
-#fig1=pl.figure(1)
-#ax1=pl.axes() #[0.15,0.15,0.95-0.15,0.95-0.15]
-
-#ax1.plot()
-
-#ax1.set_xlabel(r'')
-#ax1.set_ylabel(r'')
-#ax1.set_title(r'')
-
-#ax1.set_xlim(0,20)
-#ax1.set_ylim(0,20)
-#ax1.set_xscale('log')
-#ax1.set_yscale('log')
-#ax1.legend()
-#pl.close()
 
 
 
